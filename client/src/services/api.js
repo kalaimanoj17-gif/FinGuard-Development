@@ -109,6 +109,11 @@ export const api = {
 
   // Reports API
   getReports: () => fetchJson('/reports'),
+  getProfitLossReport: (businessId = 'B001') => fetchJson(`/reports/profit-loss?business_id=${businessId}`),
+  getCashFlowReport: (businessId = 'B001') => fetchJson(`/reports/cash-flow?business_id=${businessId}`),
+  getExpenseReport: (businessId = 'B001') => fetchJson(`/reports/expenses?business_id=${businessId}`),
+  getGstTaxReport: (businessId = 'B001') => fetchJson(`/reports/gst-tax?business_id=${businessId}`),
+  getReportSummary: (businessId = 'B001') => fetchJson(`/reports/summary?business_id=${businessId}`),
   generateReport: (data) => fetchJson('/reports/generate', {
     method: 'POST',
     body: JSON.stringify(data)

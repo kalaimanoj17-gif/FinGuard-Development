@@ -134,6 +134,14 @@ export const store = {
     { id: "TXN004", date: "2026-08-28", description: "Unmapped Supplier Wire", amount: -28000, type: "DEBIT", account: "ABC Traders Business Account", matchConfidence: 64, category: "Uncategorized", status: "UNRECONCILED", suggestedMatch: "INV005 (Amount Differs by ₹3,000)" }
   ],
 
+  cash_flow: [
+    { date: "2026-08-01", income: 64000, expense: 5200, businessId: "B001" },
+    { date: "2026-08-05", income: 72000, expense: 8000, businessId: "B001" },
+    { date: "2026-08-12", income: 58000, expense: 6000, businessId: "B001" },
+    { date: "2026-08-20", income: 60000, expense: 7000, businessId: "B001" },
+    { date: "2026-08-28", income: 40000, expense: 5000, businessId: "B001" }
+  ],
+
   reports: [
     { id: "rep-1", title: "Profit & Loss Statement", period: "Q2 FY 2026-27", status: "Generated", type: "Financial", generatedAt: "2026-09-01" },
     { id: "rep-2", title: "Cash Flow Statement", period: "August 2026", status: "Generated", type: "Cashflow", generatedAt: "2026-09-01" },
