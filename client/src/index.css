@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  /* Custom Light Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f8fafc;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
+
+/* Custom Clean Fintech Card & Panel Components */
+@layer components {
+  .glass-panel {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+  }
+
+  .glass-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+  }
+
+  .glass-card-hover {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .glass-card-hover:hover {
+    border-color: #99f6e4;
+    box-shadow: 0 4px 12px -2px rgba(13, 148, 136, 0.08);
+  }
+}
+
+@layer utilities {
+  .ai-gradient-text {
+    color: #0f766e;
+    font-weight: 800;
+  }
+
+  .ai-gradient-bg {
+    background-color: #f0fdfa;
+    border: 1px solid #ccfbf1;
+  }
+}
