@@ -477,10 +477,15 @@ router.post('/cashflow/forecast/scenario', (req, res) => {
 router.get('/reports/profit-loss', (req, res) => {
   const businessId = req.query.business_id || 'B001';
   
-  const validInvoices = store.invoices.filter(i => i.status !== 'Flagged Duplicate');
-  const invoiceRevenue = validInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
-  
-  const totalIncome = store.cash_flow ? store.cash_flow.reduce((sum, c) => sum + Number(c.income), 0) : invoiceRevenue;
+  const cashFlowIncome = (store.cash_flow || [])
+    .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+    
+  const validInvoicesRevenue = store.invoices
+    .filter(i => i.status !== 'Flagged Duplicate')
+    .reduce((sum, i) => sum + Number(i.amount), 0);
+    
+  const totalIncome = cashFlowIncome > 0 ? cashFlowIncome : validInvoicesRevenue;
   const totalExpenses = store.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const netProfit = totalIncome - totalExpenses;
   const profitMargin = totalIncome > 0 ? Number(((netProfit / totalIncome) * 100).toFixed(2)) : 0;
@@ -497,6 +502,10 @@ router.get('/reports/profit-loss', (req, res) => {
       profitMargin: `${profitMargin}%`,
       profitMarginNumeric: profitMargin
     },
+    totalIncome,
+    totalExpenses,
+    netProfit,
+    profitMargin,
     incomeStreams: [
       { stream: "Product Sales & Customer Invoices", amount: totalIncome, percentage: 100 }
     ],
@@ -504,7 +513,7 @@ router.get('/reports/profit-loss', (req, res) => {
       id: e.id,
       vendor: e.vendor,
       category: e.category,
-      amount: e.amount,
+      amount: Number(e.amount),
       date: e.date
     })),
     generatedAt: new Date().toISOString()
@@ -514,19 +523,51 @@ router.get('/reports/profit-loss', (req, res) => {
 // GET /api/reports/cash-flow
 router.get('/reports/cash-flow', (req, res) => {
   const businessId = req.query.business_id || 'B001';
+  const cashFlowRecords = store.cash_flow || [];
   
-  const dailyCashFlow = store.cash_flow || [];
-  const actualIncome = dailyCashFlow.reduce((sum, c) => sum + Number(c.income), 0);
-  const actualExpenses = dailyCashFlow.reduce((sum, c) => sum + Number(c.expense), 0);
+  const actualIncome = cashFlowRecords
+    .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+    
+  const actualExpenses = cashFlowRecords
+    .filter(r => r.type === 'Expense' && (r.status === 'Actual' || r.status !== 'Expected'))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+    
   const actualNetCashFlow = actualIncome - actualExpenses;
   
-  const expectedIncome = 200000;
-  const expectedExpenses = 120000;
+  const expectedIncomeRecords = cashFlowRecords.filter(r => r.type === 'Income' && r.status === 'Expected');
+  const expectedExpenseRecords = cashFlowRecords.filter(r => r.type === 'Expense' && r.status === 'Expected');
+  
+  const expectedIncome = expectedIncomeRecords.length > 0
+    ? expectedIncomeRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+    : 200000;
+    
+  const expectedExpenses = expectedExpenseRecords.length > 0
+    ? expectedExpenseRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+    : 120000;
+    
   const expectedNetCashFlow = expectedIncome - expectedExpenses;
-  
   const cashFlowChange = expectedNetCashFlow - actualNetCashFlow;
-  const cashFlowChangePercentage = Number(((cashFlowChange / actualNetCashFlow) * 100).toFixed(2));
+  const cashFlowChangePercentage = actualNetCashFlow !== 0 
+    ? Number(((cashFlowChange / actualNetCashFlow) * 100).toFixed(2)) 
+    : 0;
+
+  const dateMap = {};
+  cashFlowRecords.forEach(r => {
+    if (r.status === 'Expected') return;
+    if (!dateMap[r.date]) {
+      dateMap[r.date] = { date: r.date, income: 0, expense: 0, net: 0 };
+    }
+    if (r.type === 'Income') {
+      dateMap[r.date].income += Number(r.amount);
+    } else if (r.type === 'Expense') {
+      dateMap[r.date].expense += Number(r.amount);
+    }
+    dateMap[r.date].net = dateMap[r.date].income - dateMap[r.date].expense;
+  });
   
+  const dailyCashFlow = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+
   res.json({
     businessId,
     businessName: store.businessProfile.name,
@@ -543,20 +584,14 @@ router.get('/reports/cash-flow', (req, res) => {
     cashFlowChange,
     cashFlowChangePercentage: `${cashFlowChangePercentage}%`,
     cashFlowChangePercentageNumeric: cashFlowChangePercentage,
-    dailyCashFlow: dailyCashFlow.map(c => ({
-      date: c.date,
-      income: c.income,
-      expense: c.expense,
-      net: c.income - c.expense
-    })),
+    dailyCashFlow,
     generatedAt: new Date().toISOString()
   });
 });
 
-// GET /api/reports/expenses
-router.get('/reports/expenses', (req, res) => {
+// GET /api/reports/expense-breakdown & GET /api/reports/expenses
+const handleExpenseBreakdown = (req, res) => {
   const businessId = req.query.business_id || 'B001';
-  
   const totalExpenses = store.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const expenseCount = store.expenses.length;
   
@@ -569,12 +604,14 @@ router.get('/reports/expenses', (req, res) => {
     categoryMap[e.category].count += 1;
   });
   
-  const expensesByCategory = Object.values(categoryMap).map(c => ({
-    ...c,
+  const categoryBreakdown = Object.values(categoryMap).map(c => ({
+    category: c.category,
+    amount: c.amount,
+    count: c.count,
     percentage: totalExpenses > 0 ? Number(((c.amount / totalExpenses) * 100).toFixed(1)) : 0
   })).sort((a, b) => b.amount - a.amount);
   
-  const highestCategoryObj = expensesByCategory[0] || { category: "N/A", amount: 0 };
+  const highestCategoryObj = categoryBreakdown[0] || { category: "N/A", amount: 0 };
   
   const stockPurchaseSpending = store.expenses
     .filter(e => e.category === 'Inventory' || e.category === 'Stock')
@@ -589,7 +626,7 @@ router.get('/reports/expenses', (req, res) => {
     dailyMap[e.date] = (dailyMap[e.date] || 0) + Number(e.amount);
   });
   const dailyExpenses = Object.keys(dailyMap).map(date => ({ date, amount: dailyMap[date] }));
-  
+
   res.json({
     businessId,
     businessName: store.businessProfile.name,
@@ -601,19 +638,23 @@ router.get('/reports/expenses', (req, res) => {
     highestExpenseAmount: highestCategoryObj.amount,
     stockPurchaseSpending,
     operatingExpenses,
-    expensesByCategory,
+    categoryBreakdown,
+    expensesByCategory: categoryBreakdown,
     dailyExpenses,
     expensesList: store.expenses,
     generatedAt: new Date().toISOString()
   });
-});
+};
 
-// GET /api/reports/gst-tax
-router.get('/reports/gst-tax', (req, res) => {
+router.get('/reports/expense-breakdown', handleExpenseBreakdown);
+router.get('/reports/expenses', handleExpenseBreakdown);
+
+// GET /api/reports/gst-tax-summary & GET /api/reports/gst-tax
+const handleGstTaxSummary = (req, res) => {
   const businessId = req.query.business_id || 'B001';
   const comp = store.complianceData;
   const actionItems = store.aiActions.filter(a => a.category === 'Compliance' && a.status === 'ACTIVE');
-  
+
   res.json({
     businessId,
     businessName: store.businessProfile.name,
@@ -621,6 +662,7 @@ router.get('/reports/gst-tax', (req, res) => {
     period: "Q2 FY 2026-27",
     status: comp.gstFilingStatus === 'Completed' ? 'Filed' : 'Pending Filing',
     gstFilingStatus: comp.gstFilingStatus,
+    gstReturnDueDate: comp.gstDueDate,
     gstDueDate: comp.gstDueDate,
     taxFilingStatus: comp.taxFilingStatus,
     taxPaymentStatus: comp.taxPaymentStatus,
@@ -633,21 +675,27 @@ router.get('/reports/gst-tax', (req, res) => {
     filingHistory: comp.filingHistory,
     generatedAt: new Date().toISOString()
   });
-});
+};
+
+router.get('/reports/gst-tax-summary', handleGstTaxSummary);
+router.get('/reports/gst-tax', handleGstTaxSummary);
 
 // GET /api/reports/summary
 router.get('/reports/summary', (req, res) => {
   const businessId = req.query.business_id || 'B001';
   
-  const dailyCashFlow = store.cash_flow || [];
-  const actualIncome = dailyCashFlow.reduce((sum, c) => sum + Number(c.income), 0);
+  const cashFlowRecords = store.cash_flow || [];
+  const actualIncome = cashFlowRecords
+    .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+    
   const totalExpenses = store.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const netProfit = actualIncome - totalExpenses;
   const comp = store.complianceData;
   const activeAlerts = store.aiActions.filter(a => a.status === 'ACTIVE');
   
   const summaryText = `${store.businessProfile.name} maintained strong financial operations in ${store.businessProfile.fiscalYear}. Total Income: ₹${actualIncome.toLocaleString('en-IN')}, Total Operating Expenses: ₹${totalExpenses.toLocaleString('en-IN')}, resulting in Net Profit of ₹${netProfit.toLocaleString('en-IN')}. Compliance Score stands at ${comp.complianceScore}/100 (${comp.riskLevel} risk). Key action: Clear GST filing due on ${comp.gstDueDate} and review ${activeAlerts.length} active risk alerts.`;
-  
+
   res.json({
     businessId,
     businessName: store.businessProfile.name,

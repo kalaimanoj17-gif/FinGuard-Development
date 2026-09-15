@@ -135,11 +135,23 @@ export const store = {
   ],
 
   cash_flow: [
-    { date: "2026-08-01", income: 64000, expense: 5200, businessId: "B001" },
-    { date: "2026-08-05", income: 72000, expense: 8000, businessId: "B001" },
-    { date: "2026-08-12", income: 58000, expense: 6000, businessId: "B001" },
-    { date: "2026-08-20", income: 60000, expense: 7000, businessId: "B001" },
-    { date: "2026-08-28", income: 40000, expense: 5000, businessId: "B001" }
+    // Actual Income records
+    { id: "cf-1", business_id: "B001", business_name: "ABC Traders", date: "2026-08-01", type: "Income", category: "Sales Revenue", description: "Batch Store Sales Settlement", amount: 64000, status: "Actual" },
+    { id: "cf-2", business_id: "B001", business_name: "ABC Traders", date: "2026-08-05", type: "Income", category: "Sales Revenue", description: "Wholesale Inventory Clearance", amount: 72000, status: "Actual" },
+    { id: "cf-3", business_id: "B001", business_name: "ABC Traders", date: "2026-08-12", type: "Income", category: "Sales Revenue", description: "Mid-month Retail Inflow", amount: 58000, status: "Actual" },
+    { id: "cf-4", business_id: "B001", business_name: "ABC Traders", date: "2026-08-20", type: "Income", category: "Client Payment", description: "Summit Enterprises Invoice Deposit", amount: 60000, status: "Actual" },
+    { id: "cf-5", business_id: "B001", business_name: "ABC Traders", date: "2026-08-28", type: "Income", category: "Client Payment", description: "Vanguard Supplies Settlement", amount: 40000, status: "Actual" },
+
+    // Actual Expense records
+    { id: "cf-6", business_id: "B001", business_name: "ABC Traders", date: "2026-08-01", type: "Expense", category: "Logistics", description: "Freight & Haulage Fee", amount: 5200, status: "Actual" },
+    { id: "cf-7", business_id: "B001", business_name: "ABC Traders", date: "2026-08-05", type: "Expense", category: "Utilities", description: "Store Electricity & Power", amount: 8000, status: "Actual" },
+    { id: "cf-8", business_id: "B001", business_name: "ABC Traders", date: "2026-08-12", type: "Expense", category: "Operations", description: "Packaging & Supplies", amount: 6000, status: "Actual" },
+    { id: "cf-9", business_id: "B001", business_name: "ABC Traders", date: "2026-08-20", type: "Expense", category: "Software", description: "SaaS Platform Subscription", amount: 7000, status: "Actual" },
+    { id: "cf-10", business_id: "B001", business_name: "ABC Traders", date: "2026-08-28", type: "Expense", category: "Maintenance", description: "Store Repairs & Servicing", amount: 5000, status: "Actual" },
+
+    // Expected Target records
+    { id: "cf-11", business_id: "B001", business_name: "ABC Traders", date: "2026-08-31", type: "Income", category: "Target Forecast", description: "Expected Monthly Inflow Target", amount: 200000, status: "Expected" },
+    { id: "cf-12", business_id: "B001", business_name: "ABC Traders", date: "2026-08-31", type: "Expense", category: "Target Forecast", description: "Expected Monthly Outflow Target", amount: 120000, status: "Expected" }
   ],
 
   reports: [

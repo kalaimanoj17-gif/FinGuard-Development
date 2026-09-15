@@ -106,7 +106,6 @@ export const api = {
     body: JSON.stringify(scenarioData)
   }),
 
-
   // Reports API
   getReports: () => fetchJson('/reports'),
   getProfitLossReport: (businessId = 'B001') => fetchJson(`/reports/profit-loss?business_id=${businessId}`),
@@ -145,4 +144,3 @@ export const api = {
     body: JSON.stringify(payload)
   }).then(res => res.json())
 };
-

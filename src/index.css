@@ -3,15 +3,16 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    background-color: #f8fafc;
-    color: #0f172a;
+  html, body {
+    background-color: #0b1326;
+    color: #dae2fd;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
   }
 
-  /* Custom Light Scrollbars */
+  /* Custom Dark Scrollbars */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 #f8fafc;
+    scrollbar-color: #2d3449 #0b1326;
   }
 
   ::-webkit-scrollbar {
@@ -20,31 +21,31 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #f8fafc;
+    background: #0b1326;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #2d3449;
     border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #4edea3;
   }
 }
 
-/* Custom Clean Fintech Card & Panel Components */
+/* Custom Dark Futuristic Fintech Components */
 @layer components {
   .glass-panel {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+    background-color: #131b2e;
+    border: 1px solid #222a3d;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
   }
 
   .glass-card {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+    background-color: #171f33;
+    border: 1px solid #2d3449;
+    box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.3);
   }
 
   .glass-card-hover {
@@ -52,19 +53,29 @@
   }
 
   .glass-card-hover:hover {
-    border-color: #99f6e4;
-    box-shadow: 0 4px 12px -2px rgba(13, 148, 136, 0.08);
+    border-color: #4edea3;
+    box-shadow: 0 6px 20px -2px rgba(78, 222, 163, 0.15);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
 @layer utilities {
   .ai-gradient-text {
-    color: #0f766e;
+    background: linear-gradient(135deg, #4edea3 0%, #7bd0ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     font-weight: 800;
   }
 
   .ai-gradient-bg {
-    background-color: #f0fdfa;
-    border: 1px solid #ccfbf1;
+    background: linear-gradient(135deg, rgba(78, 222, 163, 0.1) 0%, rgba(123, 208, 255, 0.08) 100%);
+    border: 1px solid rgba(78, 222, 163, 0.25);
   }
 }
