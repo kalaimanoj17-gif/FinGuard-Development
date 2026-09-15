@@ -378,5 +378,328 @@ export class FinGuardAgentEngine {
       }
     };
   }
+
+  /**
+   * Calculates Financial Health Score across Cash Flow, Invoices, Compliance, Inventory & Risk
+   */
+  static calculateFinancialHealthScore() {
+    const cashFlowRecords = store.cash_flow || [];
+    const actualIncome = cashFlowRecords
+      .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    const actualExpenses = cashFlowRecords
+      .filter(r => r.type === 'Expense' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const cashFlowScore = actualIncome > 0 ? Math.min(100, Math.round(((actualIncome - actualExpenses) / actualIncome) * 100)) : 70;
+
+    const totalInvoices = store.invoices.length;
+    const duplicateInvoices = store.invoices.filter(i => (i.status || '').includes('Duplicate') || (i.aiRisk || '').includes('HIGH')).length;
+    const invoiceScore = totalInvoices > 0 ? Math.max(0, Math.round(((totalInvoices - duplicateInvoices) / totalInvoices) * 100)) : 90;
+
+    const complianceObj = this.recalculateComplianceScore();
+    const complianceScore = complianceObj.score;
+
+    const inventoryItems = store.inventory || [];
+    const unhealthyInventory = inventoryItems.filter(item => item.currentStock < item.minimumStock).length;
+    const inventoryScore = inventoryItems.length > 0 ? Math.max(0, Math.round(((inventoryItems.length - unhealthyInventory) / inventoryItems.length) * 100)) : 80;
+
+    const activeActions = store.aiActions.filter(a => a.status === 'ACTIVE');
+    const highRiskAlerts = activeActions.filter(a => a.severity === 'HIGH');
+    const riskScore = Math.max(0, 100 - (highRiskAlerts.length * 15 + activeActions.length * 5));
+
+    const overallScore = Math.round(
+      (cashFlowScore * 0.25) +
+      (invoiceScore * 0.20) +
+      (complianceScore * 0.20) +
+      (inventoryScore * 0.20) +
+      (riskScore * 0.15)
+    );
+
+    let status = 'HEALTHY';
+    if (overallScore >= 90) status = 'EXCELLENT';
+    else if (overallScore >= 75) status = 'HEALTHY';
+    else if (overallScore >= 60) status = 'NEEDS ATTENTION';
+    else if (overallScore >= 40) status = 'AT RISK';
+    else status = 'CRITICAL';
+
+    return {
+      score: overallScore,
+      status,
+      components: {
+        cashFlow: cashFlowScore,
+        invoice: invoiceScore,
+        compliance: complianceScore,
+        inventory: inventoryScore,
+        risk: riskScore
+      }
+    };
+  }
+
+  /**
+   * Aggregates complete Dashboard Overview structure
+   */
+  static getDashboardOverview(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const health = this.calculateFinancialHealthScore();
+    const cashFlowRecords = store.cash_flow || [];
+
+    const actualIncome = cashFlowRecords
+      .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const validInvoicesRevenue = store.invoices
+      .filter(i => i.status !== 'Flagged Duplicate')
+      .reduce((sum, i) => sum + Number(i.amount), 0);
+
+    const totalIncome = actualIncome > 0 ? actualIncome : validInvoicesRevenue;
+
+    const totalExpenses = store.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const netProfit = totalIncome - totalExpenses;
+    const profitMargin = totalIncome > 0 ? Number(((netProfit / totalIncome) * 100).toFixed(2)) : 0;
+
+    const actualExpenseCash = cashFlowRecords
+      .filter(r => r.type === 'Expense' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const actualNetCashFlow = actualIncome - actualExpenseCash;
+
+    const expectedIncomeRecords = cashFlowRecords.filter(r => r.type === 'Income' && r.status === 'Expected');
+    const expectedExpenseRecords = cashFlowRecords.filter(r => r.type === 'Expense' && r.status === 'Expected');
+
+    const expectedIncome = expectedIncomeRecords.length > 0
+      ? expectedIncomeRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+      : 200000;
+
+    const expectedExpenses = expectedExpenseRecords.length > 0
+      ? expectedExpenseRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+      : 120000;
+
+    const expectedNetCashFlow = expectedIncome - expectedExpenses;
+
+    const potentialDuplicates = store.invoices.filter(i => (i.status || '').includes('Duplicate') || (i.aiRisk || '').includes('HIGH')).length;
+    const pendingInvoices = store.invoices.filter(i => i.status === 'Pending').length;
+    const flaggedInvoices = store.invoices.filter(i => (i.status || '').includes('Flagged') || (i.status || '').includes('Duplicate')).length;
+
+    const comp = store.complianceData;
+
+    const inventoryItems = store.inventory || [];
+    const criticalItems = inventoryItems.filter(i => i.status === 'Critical' || i.currentStock <= i.minimumStock * 0.5).length;
+    const lowStockItems = inventoryItems.filter(i => i.status === 'Low Stock' || (i.currentStock < i.minimumStock && i.currentStock > i.minimumStock * 0.5)).length;
+    const healthyItems = inventoryItems.filter(i => i.status === 'Healthy' || i.currentStock >= i.minimumStock).length;
+
+    const activeAlerts = store.aiActions.filter(a => a.status === 'ACTIVE');
+    const highRisk = activeAlerts.some(a => a.severity === 'HIGH') || potentialDuplicates > 0;
+
+    return {
+      businessId,
+      businessName: store.businessProfile.name || 'ABC Traders',
+      financialHealth: {
+        score: health.score,
+        status: health.status,
+        components: health.components
+      },
+      financialSummary: {
+        totalIncome,
+        totalExpenses,
+        netProfit,
+        profitMargin
+      },
+      cashFlow: {
+        actualIncome,
+        actualExpenses: actualExpenseCash,
+        actualNetCashFlow,
+        expectedIncome,
+        expectedExpenses,
+        expectedNetCashFlow
+      },
+      invoiceHealth: {
+        potentialDuplicates,
+        pendingInvoices,
+        flaggedInvoices
+      },
+      compliance: {
+        gstFilingStatus: comp.gstFilingStatus,
+        gstReturnDueDate: comp.gstDueDate || "2026-09-10",
+        taxFilingStatus: comp.taxFilingStatus,
+        taxPaymentStatus: comp.taxPaymentStatus,
+        complianceScore: comp.complianceScore,
+        riskLevel: comp.riskLevel
+      },
+      inventory: {
+        criticalItems,
+        lowStockItems,
+        healthyItems
+      },
+      risk: {
+        riskLevel: highRisk ? "HIGH" : comp.riskLevel,
+        potentialDuplicateInvoices: potentialDuplicates > 0
+      }
+    };
+  }
+
+  /**
+   * Returns AI Actions formatted cleanly for AI Action Center endpoint
+   */
+  static getAiActionsList(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const activeActions = store.aiActions.filter(a => a.status === 'ACTIVE');
+    const inventoryItems = store.inventory || [];
+    const lowStock = inventoryItems.filter(i => i.currentStock < i.minimumStock);
+
+    const formattedActions = activeActions.map(a => {
+      let sanitizedTitle = a.title;
+      if (sanitizedTitle.includes('Fraud')) {
+        sanitizedTitle = sanitizedTitle.replace('Fraud', 'Risk Detected');
+      }
+
+      return {
+        id: a.id,
+        severity: a.severity === 'HIGH' ? 'HIGH' : a.severity === 'IMPORTANT' ? 'IMPORTANT' : 'WATCH',
+        title: sanitizedTitle,
+        description: a.subtitle || a.title,
+        amount: a.details?.amount || (a.details?.invoiceNumber ? 25000 : undefined),
+        dueDate: a.details?.dueDate || (a.category === 'Compliance' ? '2026-09-10' : undefined),
+        action: a.actionType || (a.category === 'Fraud & Risk' ? 'Review Invoice' : 'Review Compliance'),
+        status: a.status,
+        details: a.details
+      };
+    });
+
+    lowStock.forEach(item => {
+      formattedActions.push({
+        id: `stock-${item.id.toLowerCase()}`,
+        severity: item.status === 'Critical' ? 'CRITICAL' : 'IMPORTANT',
+        title: `${item.item} Below Minimum Stock`,
+        description: `Current stock (${item.currentStock}) is below the minimum threshold (${item.minimumStock}).`,
+        action: "Restock Now",
+        status: "ACTIVE",
+        details: {
+          item: item.item,
+          currentStock: item.currentStock,
+          minimumStock: item.minimumStock
+        }
+      });
+    });
+
+    return {
+      businessId,
+      actions: formattedActions
+    };
+  }
+
+  /**
+   * Invoice Summary calculation
+   */
+  static getInvoiceSummary(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const invoices = store.invoices || [];
+
+    const totalInvoices = invoices.length;
+    const potentialDuplicates = invoices.filter(i => (i.status || '').includes('Duplicate') || (i.aiRisk || '').includes('HIGH')).length;
+    const pendingInvoices = invoices.filter(i => i.status === 'Pending').length;
+    const flaggedInvoices = invoices.filter(i => (i.status || '').includes('Flagged') || (i.status || '').includes('Duplicate')).length;
+    const totalInvoiceValue = invoices.reduce((sum, i) => sum + Number(i.amount), 0);
+
+    return {
+      businessId,
+      totalInvoices,
+      potentialDuplicates,
+      pendingInvoices,
+      flaggedInvoices,
+      totalInvoiceValue
+    };
+  }
+
+  /**
+   * Inventory Summary calculation
+   */
+  static getInventorySummary(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const inventoryItems = store.inventory || [];
+
+    const criticalItems = inventoryItems.filter(i => i.status === 'Critical' || i.currentStock <= i.minimumStock * 0.5).length;
+    const lowStockItems = inventoryItems.filter(i => i.status === 'Low Stock' || (i.currentStock < i.minimumStock && i.currentStock > i.minimumStock * 0.5)).length;
+    const healthyItems = inventoryItems.filter(i => i.status === 'Healthy' || i.currentStock >= i.minimumStock).length;
+
+    const restockPriority = inventoryItems
+      .filter(i => i.currentStock < i.minimumStock)
+      .map(i => ({
+        item: i.item,
+        currentStock: i.currentStock,
+        minimumStock: i.minimumStock
+      }));
+
+    return {
+      businessId,
+      criticalItems,
+      lowStockItems,
+      healthyItems,
+      restockPriority
+    };
+  }
+
+  /**
+   * Compliance Summary calculation
+   */
+  static getComplianceSummary(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const comp = store.complianceData;
+    this.recalculateComplianceScore();
+
+    return {
+      businessId,
+      gstFilingStatus: comp.gstFilingStatus,
+      gstReturnDueDate: comp.gstDueDate || "2026-09-10",
+      taxFilingStatus: comp.taxFilingStatus,
+      taxPaymentStatus: comp.taxPaymentStatus,
+      complianceScore: comp.complianceScore,
+      riskLevel: comp.riskLevel
+    };
+  }
+
+  /**
+   * Cash Flow Summary calculation
+   */
+  static getCashFlowSummary(requestedBusinessId = 'B001') {
+    const businessId = requestedBusinessId || store.businessProfile.businessId || 'B001';
+    const cashFlowRecords = store.cash_flow || [];
+
+    const actualIncome = cashFlowRecords
+      .filter(r => r.type === 'Income' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const actualExpenses = cashFlowRecords
+      .filter(r => r.type === 'Expense' && (r.status === 'Actual' || r.status !== 'Expected'))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    const actualNetCashFlow = actualIncome - actualExpenses;
+
+    const expectedIncomeRecords = cashFlowRecords.filter(r => r.type === 'Income' && r.status === 'Expected');
+    const expectedExpenseRecords = cashFlowRecords.filter(r => r.type === 'Expense' && r.status === 'Expected');
+
+    const expectedIncome = expectedIncomeRecords.length > 0
+      ? expectedIncomeRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+      : 200000;
+
+    const expectedExpenses = expectedExpenseRecords.length > 0
+      ? expectedExpenseRecords.reduce((sum, r) => sum + Number(r.amount), 0)
+      : 120000;
+
+    const expectedNetCashFlow = expectedIncome - expectedExpenses;
+
+    return {
+      businessId,
+      actualIncome,
+      actualExpenses,
+      actualNetCashFlow,
+      expectedIncome,
+      expectedExpenses,
+      expectedNetCashFlow,
+      cashFlowTrend: "DECLINING",
+      riskLevel: store.complianceData.riskLevel || "LOW"
+    };
+  }
 }
+
 

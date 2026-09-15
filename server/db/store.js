@@ -162,12 +162,20 @@ export const store = {
   ],
 
   copilotMessages: [
-    {
-      id: "msg-0",
+    { id: "msg-0",
       sender: "ai",
       timestamp: "10:30 AM",
       text: "Good morning! I am FinGuard Copilot. Your financial health score is 72/100 (MEDIUM risk). You have 1 High Risk duplicate invoice alert (INV001 ↔ INV002 for ₹25,000 from ABC Suppliers) and GST filing pending due 10 September 2026. How can I assist you today?"
     }
+  ],
+
+  inventory: [
+    { id: "SKU-001", item: "Sugar 1kg", category: "Staples", currentStock: 7, minimumStock: 20, unitPrice: 45, status: "Critical" },
+    { id: "SKU-002", item: "Rice 25kg", category: "Grains", currentStock: 6, minimumStock: 10, unitPrice: 1350, status: "Low Stock" },
+    { id: "SKU-003", item: "Cooking Oil 5L", category: "Oils", currentStock: 25, minimumStock: 12, unitPrice: 750, status: "Healthy" },
+    { id: "SKU-004", item: "Wheat Flour 10kg", category: "Grains", currentStock: 18, minimumStock: 8, unitPrice: 420, status: "Healthy" },
+    { id: "SKU-005", item: "Toor Dal 1kg", category: "Pulses", currentStock: 30, minimumStock: 15, unitPrice: 160, status: "Healthy" }
   ]
 };
+
 

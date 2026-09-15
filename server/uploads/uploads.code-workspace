@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../test"
+		},
+		{
+			"path": "../routes"
+		},
+		{
+			"path": "../db"
+		},
+		{
+			"path": "../agent"
+		}
+	]
+}

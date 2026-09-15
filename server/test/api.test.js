@@ -225,6 +225,85 @@ async function runTests() {
     assert.ok(res.data.webhookUrl.includes('snsihub.ai'));
   });
 
+  // 13. Financial Intelligence Dashboard APIs
+  await test('GET /api/reports and GET /api/reports/profit-loss return valid reporting metrics', async () => {
+    const repRes = await request('GET', '/reports');
+    assert.equal(repRes.status, 200);
+    assert.ok(Array.isArray(repRes.data.reports));
+
+    const plRes = await request('GET', '/reports/profit-loss?business_id=B001');
+    assert.equal(plRes.status, 200);
+    assert.equal(plRes.data.businessId, 'B001');
+    assert.ok(typeof plRes.data.totalIncome === 'number');
+    assert.ok(typeof plRes.data.totalExpenses === 'number');
+    assert.ok(typeof plRes.data.netProfit === 'number');
+    assert.ok(typeof plRes.data.profitMargin === 'number');
+  });
+
+  await test('GET /api/dashboard/overview returns aggregated overview structure', async () => {
+    const res = await request('GET', '/dashboard/overview?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(typeof res.data.financialHealth.score === 'number');
+    assert.ok(res.data.financialHealth.status);
+    assert.ok(typeof res.data.financialSummary.totalIncome === 'number');
+    assert.ok(typeof res.data.cashFlow.actualIncome === 'number');
+    assert.ok(typeof res.data.invoiceHealth.potentialDuplicates === 'number');
+    assert.ok(res.data.compliance.gstFilingStatus);
+    assert.ok(typeof res.data.inventory.criticalItems === 'number');
+  });
+
+  await test('GET /api/financial-health returns calculated 5-component health score', async () => {
+    const res = await request('GET', '/financial-health');
+    assert.equal(res.status, 200);
+    assert.ok(typeof res.data.score === 'number');
+    assert.ok(res.data.components.cashFlow);
+    assert.ok(res.data.components.invoice);
+    assert.ok(res.data.components.compliance);
+    assert.ok(res.data.components.inventory);
+    assert.ok(res.data.components.risk);
+  });
+
+  await test('GET /api/ai/actions returns prioritized AI action items', async () => {
+    const res = await request('GET', '/ai/actions?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(Array.isArray(res.data.actions));
+  });
+
+  await test('GET /api/invoices/summary returns invoice breakdown summary', async () => {
+    const res = await request('GET', '/invoices/summary?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(typeof res.data.totalInvoices === 'number');
+    assert.ok(typeof res.data.potentialDuplicates === 'number');
+  });
+
+  await test('GET /api/inventory/summary returns stock status and restock priorities', async () => {
+    const res = await request('GET', '/inventory/summary?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(typeof res.data.criticalItems === 'number');
+    assert.ok(Array.isArray(res.data.restockPriority));
+  });
+
+  await test('GET /api/compliance/summary returns compliance score & filing statuses', async () => {
+    const res = await request('GET', '/compliance/summary?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(typeof res.data.complianceScore === 'number');
+    assert.ok(res.data.gstFilingStatus);
+  });
+
+  await test('GET /api/cash-flow/summary returns actual and expected cash flows', async () => {
+    const res = await request('GET', '/cash-flow/summary?business_id=B001');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.businessId, 'B001');
+    assert.ok(typeof res.data.actualIncome === 'number');
+    assert.ok(typeof res.data.expectedIncome === 'number');
+  });
+
+
 
   console.log(`\n====================================================`);
   console.log(`📊 Test Results: ${passed} PASSED, ${failed} FAILED`);

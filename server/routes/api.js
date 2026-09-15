@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
+import fs from 'fs';
 import { store } from '../db/store.js';
 import { FinGuardAgentEngine } from '../agent/workflowEngine.js';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
+
 
 // --- HEALTH ---
 router.get('/health', (req, res) => {
@@ -208,6 +210,84 @@ router.get('/dashboard', (req, res) => {
   });
 });
 
+router.get('/dashboard/overview', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const overview = FinGuardAgentEngine.getDashboardOverview(businessId);
+    res.json(overview);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load dashboard overview data' });
+  }
+});
+
+router.get('/financial-health', (req, res) => {
+  try {
+    const health = FinGuardAgentEngine.calculateFinancialHealthScore();
+    res.json(health);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load financial health score' });
+  }
+});
+
+router.get('/ai/actions', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const actionsData = FinGuardAgentEngine.getAiActionsList(businessId);
+    res.json(actionsData);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load AI actions' });
+  }
+});
+
+router.get('/invoices/summary', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const summary = FinGuardAgentEngine.getInvoiceSummary(businessId);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load invoice summary' });
+  }
+});
+
+router.get('/inventory/summary', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const summary = FinGuardAgentEngine.getInventorySummary(businessId);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load inventory summary' });
+  }
+});
+
+router.get('/inventory', (req, res) => {
+  try {
+    res.json({ inventory: store.inventory || [] });
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load inventory items' });
+  }
+});
+
+router.get('/compliance/summary', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const summary = FinGuardAgentEngine.getComplianceSummary(businessId);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load compliance summary' });
+  }
+});
+
+router.get('/cash-flow/summary', (req, res) => {
+  try {
+    const businessId = req.query.business_id || req.query.businessId || 'B001';
+    const summary = FinGuardAgentEngine.getCashFlowSummary(businessId);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: true, message: 'Unable to load cash flow summary' });
+  }
+});
+
+
 // --- INVOICES ---
 router.get('/invoices', (req, res) => {
   res.json({
@@ -256,6 +336,73 @@ router.post('/invoices', (req, res) => {
     aiAnalysis: aiResult
   });
 });
+
+router.post('/invoices/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No invoice file provided. Please attach a valid PDF, PNG, JPG, or JPEG file.'
+      });
+    }
+
+    const businessId = req.body.business_id || 'B001';
+
+    // Read binary file from disk
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype || 'application/pdf' });
+
+    // Construct multipart/form-data for SNS Webhook
+    const snsFormData = new FormData();
+    snsFormData.append('file', fileBlob, req.file.originalname);
+    snsFormData.append('business_id', businessId);
+
+    const snsUrl = 'https://api.agents.snsihub.ai/webhook/d8280e0f-0480-43e8-8d3e-a45f301143e3';
+    const snsResponse = await fetch(snsUrl, {
+      method: 'POST',
+      body: snsFormData
+    });
+
+    // Remove temporary local file
+    fs.unlink(req.file.path, () => {});
+
+    const contentType = snsResponse.headers.get('content-type') || '';
+    let resultData;
+    if (contentType.includes('application/json')) {
+      resultData = await snsResponse.json();
+    } else {
+      resultData = await snsResponse.text();
+    }
+
+    if (snsResponse.ok) {
+      return res.json({
+        success: true,
+        message: 'Invoice processed successfully',
+        result: resultData,
+        data: resultData,
+        rawSnsResponse: resultData
+      });
+    } else {
+      return res.status(snsResponse.status || 500).json({
+        success: false,
+        error: typeof resultData === 'string' 
+          ? resultData 
+          : (resultData.error || resultData.message || JSON.stringify(resultData)),
+        rawSnsResponse: resultData
+      });
+    }
+  } catch (err) {
+    console.error('[Invoice Upload Error]:', err);
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, () => {});
+    }
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Invoice processing failed'
+    });
+  }
+});
+
 
 router.patch('/invoices/:id/status', (req, res) => {
   const { id } = req.params;
@@ -457,6 +604,95 @@ router.post('/fraud-alerts/:id/resolve', (req, res) => {
 });
 
 // --- CASH FORECAST ---
+router.get(['/cash-flow/summary', '/cashflow/summary'], (req, res) => {
+  const businessId = req.query.business_id || store.businessProfile.businessId || 'B001';
+  const businessName = store.businessProfile.name || 'ABC Traders';
+
+  const records = (store.cash_flow || []).filter(r => !r.business_id || r.business_id === businessId || businessId === 'B001');
+
+  const actualIncome = records
+    .filter(r => r.type === 'Income' && r.status === 'Actual')
+    .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+  const actualExpenses = records
+    .filter(r => r.type === 'Expense' && r.status === 'Actual')
+    .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+  const actualNetCashFlow = actualIncome - actualExpenses;
+
+  const expectedIncomeRecords = records.filter(r => r.type === 'Income' && r.status === 'Expected');
+  const expectedExpenseRecords = records.filter(r => r.type === 'Expense' && r.status === 'Expected');
+
+  const expectedIncome = expectedIncomeRecords.length > 0
+    ? expectedIncomeRecords.reduce((sum, r) => sum + Number(r.amount || 0), 0)
+    : 200000;
+
+  const expectedExpenses = expectedExpenseRecords.length > 0
+    ? expectedExpenseRecords.reduce((sum, r) => sum + Number(r.amount || 0), 0)
+    : 120000;
+
+  const expectedNetCashFlow = expectedIncome - expectedExpenses;
+
+  const cashFlowChange = expectedNetCashFlow - actualNetCashFlow;
+  const cashFlowChangePercent = actualNetCashFlow !== 0
+    ? Number(((cashFlowChange / Math.abs(actualNetCashFlow)) * 100).toFixed(2))
+    : 0;
+
+  let cashFlowTrend = 'STABLE';
+  if (expectedNetCashFlow > actualNetCashFlow) {
+    cashFlowTrend = 'IMPROVING';
+  } else if (expectedNetCashFlow < actualNetCashFlow) {
+    cashFlowTrend = 'DECLINING';
+  }
+
+  const riskLevel = actualNetCashFlow < 0 ? 'HIGH RISK' : 'LOW RISK';
+  const riskMessage = actualNetCashFlow >= 0
+    ? `Working capital buffer is healthy with ₹${actualNetCashFlow.toLocaleString('en-IN')} net surplus. No immediate cash crunch predicted.`
+    : `Working capital deficit detected! Cash balance is negative by ₹${Math.abs(actualNetCashFlow).toLocaleString('en-IN')}. Immediate liquidity planning required.`;
+
+  const largeUpcomingExpense = store.expenses.some(e => Number(e.amount) >= 20000 && e.approval !== 'Approved');
+  const status = actualNetCashFlow >= 0 ? 'Positive Surplus' : 'Deficit Warning';
+
+  const dailyMap = new Map();
+  records
+    .filter(r => r.status === 'Actual' && r.date)
+    .forEach(r => {
+      const d = r.date;
+      if (!dailyMap.has(d)) {
+        dailyMap.set(d, { date: d, income: 0, expenses: 0 });
+      }
+      const item = dailyMap.get(d);
+      if (r.type === 'Income') item.income += Number(r.amount || 0);
+      if (r.type === 'Expense') item.expenses += Number(r.amount || 0);
+    });
+
+  const dailyCashFlow = Array.from(dailyMap.values())
+    .map(item => ({
+      ...item,
+      netCashFlow: item.income - item.expenses
+    }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  res.json({
+    businessId,
+    businessName,
+    actualIncome,
+    actualExpenses,
+    actualNetCashFlow,
+    expectedIncome,
+    expectedExpenses,
+    expectedNetCashFlow,
+    cashFlowChange,
+    cashFlowChangePercent,
+    cashFlowTrend,
+    riskLevel,
+    riskMessage,
+    largeUpcomingExpense,
+    status,
+    dailyCashFlow
+  });
+});
+
 router.get('/cashflow/forecast', (req, res) => {
   const forecastData = FinGuardAgentEngine.generateCashForecast(req.query);
   res.json(forecastData);

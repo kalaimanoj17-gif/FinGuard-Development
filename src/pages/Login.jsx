@@ -1,308 +1,354 @@
-import React, { useState } from 'react';
-import { 
-  Shield, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  ArrowRight, 
-  RefreshCw, 
-  AlertCircle, 
-  CheckCircle2,
-  Sparkles
-} from 'lucide-react';
+import React, { useState } from "react";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
+import {
+  Shield,
+  Lock,
+  Mail,
+  User,
+  Building,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Sparkles,
+  AlertCircle,
+  KeyRound,
+  Database,
+} from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import Logo from "../components/Logo";
+import { useToast } from "../components/ui";
+import AnimatedBackground from "../components/AnimatedBackground";
 
-export default function Login({ onLogin, onNavigate }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function Login() {
+  const { login, signup, isAuthenticated, usersDb } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const push = useToast();
+
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Email format regex validation
-  const isValidEmail = (emailStr) => {
-    if (!emailStr || typeof emailStr !== 'string') return false;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(emailStr.trim());
+  // Form states
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [role, setRole] = useState("Business Owner");
+  const [rememberMe, setRememberMe] = useState(true);
+
+  // If already authenticated, redirect to home
+  if (isAuthenticated) {
+    const from = location.state?.from?.pathname || "/";
+    return <Navigate to={from} replace />;
+  }
+
+  const handleQuickFill = (demoEmail, demoPass) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError("");
+    setMode("signin");
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setErrorMessage('');
+    setError("");
+    setLoading(true);
 
-    const trimmedEmail = (email || '').trim();
-    const trimmedPassword = password || '';
-
-    // CASE 5: Empty or invalid email check
-    if (!trimmedEmail) {
-      setErrorMessage('Please enter a valid email address.');
-      return;
-    }
-
-    if (!isValidEmail(trimmedEmail)) {
-      setErrorMessage('Please enter a valid email address.');
-      return;
-    }
-
-    // CASE 5: Empty password check
-    if (!trimmedPassword) {
-      setErrorMessage('Please enter your password.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    // Simulate authentication check
     setTimeout(() => {
-      setIsLoading(false);
-      
-      // 1. Check registered users in localStorage
-      let registeredUsers = [];
-      try {
-        const stored = localStorage.getItem('finguard_users');
-        if (stored) registeredUsers = JSON.parse(stored);
-      } catch (err) {}
-
-      const foundUser = registeredUsers.find(
-        (u) => u.email && u.email.toLowerCase() === trimmedEmail.toLowerCase()
-      );
-
-      if (foundUser) {
-        if (foundUser.password && foundUser.password !== trimmedPassword) {
-          setErrorMessage('Invalid email or password. Please check your credentials and try again.');
+      if (mode === "signin") {
+        const res = login(email, password);
+        if (res.success) {
+          push(`Welcome back, ${res.user.name}!`, "success");
+          const destination = location.state?.from?.pathname || "/";
+          navigate(destination, { replace: true });
+        } else {
+          setError(res.message);
+          push(res.message, "warning");
+        }
+      } else {
+        if (!name.trim() || !email.trim() || !password) {
+          setError("Please fill in all required fields.");
+          setLoading(false);
           return;
         }
 
-        const success = onLogin(
-          {
-            name: foundUser.name || 'Business Owner',
-            email: foundUser.email,
-            role: foundUser.role || 'Business Owner / Admin',
-            business: foundUser.business || 'My Business',
-            businessId: foundUser.businessId || 'B001'
-          },
-          rememberMe
-        );
+        const res = signup({
+          name,
+          email,
+          password,
+          businessName,
+          role,
+        });
 
-        if (!success) {
-          setErrorMessage('Login failed. Please check your credentials and try again.');
+        if (res.success) {
+          push(`Account created successfully! Welcome, ${res.user.name}.`, "success");
+          navigate("/", { replace: true });
+        } else {
+          setError(res.message);
+          push(res.message, "warning");
         }
-        return;
       }
-
-      // 2. Demo credential check
-      if (trimmedEmail.toLowerCase() === 'admin@abctraders.com') {
-        if (trimmedPassword !== 'FinGuard@123') {
-          setErrorMessage('Invalid email or password. Please check your credentials and try again.');
-          return;
-        }
-        onLogin(
-          {
-            name: 'Business Owner',
-            email: 'admin@abctraders.com',
-            role: 'Business Owner / Admin',
-            business: 'ABC Traders',
-            businessId: 'B001'
-          },
-          rememberMe
-        );
-        return;
-      }
-
-      // 3. Dynamic account login for any valid email & password
-      const emailPrefix = trimmedEmail.split('@')[0];
-      const formattedName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-
-      const dynamicUser = {
-        name: formattedName,
-        email: trimmedEmail,
-        role: 'Business Owner / Admin',
-        business: `${formattedName}'s Business`,
-        businessId: 'B' + Math.floor(100 + Math.random() * 900)
-      };
-
-      const success = onLogin(dynamicUser, rememberMe);
-      if (!success) {
-        setErrorMessage('Invalid email or password. Please check your credentials and try again.');
-      }
+      setLoading(false);
     }, 400);
   };
 
-  // Demo credential autofill handler (does NOT bypass login)
-  const handleAutofillDemo = () => {
-    setErrorMessage('');
-    setEmail('admin@abctraders.com');
-    setPassword('FinGuard@123');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col justify-between items-center p-4 sm:p-6 select-none">
-      {/* Top Spacer */}
-      <div className="w-full max-w-[440px] pt-4 sm:pt-8"></div>
+    <div
+      className="relative min-h-screen flex flex-col justify-center items-center px-4 py-8 sm:px-6 lg:px-8 selection:bg-blue-600 selection:text-white overflow-hidden bg-[#F8FAFC] font-body"
+    >
+      {/* Dynamic Ambient Animated Background */}
+      <AnimatedBackground />
 
-      {/* Main Authentication Card */}
-      <div className="w-full max-w-[440px] bg-white border border-slate-200 shadow-sm rounded-2xl p-6 sm:p-8 space-y-6">
-        {/* Top Branding Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-teal-700 text-white shadow-xs mb-1">
-            <Shield className="w-6 h-6 stroke-[2.5]" />
+      <div className="relative z-10 w-full max-w-md my-auto">
+        {/* Brand Header */}
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center px-5 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-sm backdrop-blur-md mb-2.5">
+            <Logo dark={false} size="lg" />
           </div>
-          <div>
-            <div className="flex items-center justify-center gap-1.5">
-              <span className="font-extrabold text-xl tracking-tight text-slate-900">FinGuard</span>
-              <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-800">AI</span>
+          <h2 className="font-display text-2xl sm:text-[28px] font-extrabold tracking-tight text-slate-900">
+            {mode === "signin" ? "Sign In to FinGuard" : "Create Your Account"}
+          </h2>
+          <p className="mt-1 text-xs sm:text-[13px] text-slate-500 font-medium">
+            Autonomous financial intelligence & credit governance
+          </p>
+        </div>
+
+        {/* Main Glass Card */}
+        <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-6 sm:p-7 backdrop-blur-2xl shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition-all">
+          {/* Mode Switch Tabs */}
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 border border-slate-200 mb-4">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signin");
+                setError("");
+              }}
+              className={`rounded-lg py-2 text-xs font-semibold transition-all cursor-pointer ${
+                mode === "signin"
+                  ? "bg-blue-600 text-white shadow-sm font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signup");
+                setError("");
+              }}
+              className={`rounded-lg py-2 text-xs font-semibold transition-all cursor-pointer ${
+                mode === "signup"
+                  ? "bg-blue-600 text-white shadow-sm font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Create account
+            </button>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-3.5 flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-700 animate-[fadeIn_.15s_ease-out]">
+              <AlertCircle size={16} className="shrink-0 text-rose-500" />
+              <span>{error}</span>
             </div>
-            <p className="text-[11px] font-semibold text-slate-500 tracking-wider uppercase mt-0.5">
-              AI-Native Financial Operations
-            </p>
-          </div>
-        </div>
+          )}
 
-        {/* Login Title */}
-        <div className="text-center">
-          <h1 className="text-xl font-extrabold text-slate-900">Welcome back</h1>
-          <p className="text-xs text-slate-500 mt-1">Sign in to your FinGuard account</p>
-        </div>
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {mode === "signup" && (
+              <>
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <User size={13} className="text-blue-600" />
+                    Full name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Janarthanan V"
+                    className="focus-ring w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
+                  />
+                </div>
 
-        {/* Error Alert Message */}
-        {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2 animate-in fade-in duration-200">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <Building size={13} className="text-blue-600" />
+                      Business name
+                    </label>
+                    <input
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="e.g. MJ Solutions"
+                      className="focus-ring w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <Sparkles size={13} className="text-blue-600" />
+                      Role
+                    </label>
+                    <input
+                      type="text"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      placeholder="e.g. Financial CEO"
+                      className="focus-ring w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Field */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Email address</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+            <div>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <Mail size={13} className="text-blue-600" />
+                Email address
+              </label>
               <input
-                type="text"
+                type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700/20 transition-all placeholder:text-slate-400"
+                placeholder="name@business.com"
+                className="focus-ring w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all"
               />
             </div>
-          </div>
 
-          {/* Password Field */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-xl pl-10 pr-10 py-2.5 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700/20 transition-all placeholder:text-slate-400"
-              />
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <Lock size={13} className="text-blue-600" />
+                  Password
+                </label>
+                {mode === "signin" && (
+                  <button
+                    type="button"
+                    onClick={() => push("Use the 1-click demo buttons below to fill credentials.", "info")}
+                    className="text-[11px] text-blue-600 hover:text-blue-800 transition-colors font-semibold"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="focus-ring w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white transition-all font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {mode === "signin" && (
+              <div className="flex items-center justify-between py-0.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-600 font-medium">Remember my session</span>
+                </label>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-500/25 hover:bg-blue-700 transition-all disabled:opacity-50 mt-1 cursor-pointer"
+            >
+              {loading ? (
+                <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <>
+                  <span>{mode === "signin" ? "Sign in to Dashboard" : "Register & Enter"}</span>
+                  <ArrowRight size={15} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Quick Demo Credentials Autofill */}
+          <div className="mt-4 border-t border-slate-100 pt-3.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 mb-2">
+              <KeyRound size={13} className="text-blue-600" />
+              <span>1-Click Demo Accounts:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => handleQuickFill("janarthananv456@gmail.com", "Jana@Project")}
+                className="flex flex-col items-start rounded-xl border border-slate-200 bg-slate-50/60 p-2 text-left hover:border-blue-300 hover:bg-blue-50/40 transition-all group cursor-pointer"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[11px] font-bold text-slate-900 group-hover:text-blue-600">Janarthanan</span>
+                  <span className="text-[9px] rounded bg-blue-50 text-blue-700 border border-blue-200/80 px-1 py-0.2 font-bold">CEO</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 truncate w-full">janarthananv...</span>
+                <span className="text-[9px] text-blue-600 font-medium">Jana@Project</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickFill("riya@handloomexports.in", "Admin@123")}
+                className="flex flex-col items-start rounded-xl border border-slate-200 bg-slate-50/60 p-2 text-left hover:border-blue-300 hover:bg-blue-50/40 transition-all group cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[11px] font-bold text-slate-900 group-hover:text-blue-600">Riya Shah</span>
+                  <span className="text-[9px] rounded bg-blue-50 text-blue-700 border border-blue-200/80 px-1 py-0.2 font-bold">CFO</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 truncate w-full">riya@handloom...</span>
+                <span className="text-[9px] text-blue-600 font-medium">Admin@123</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickFill("demo@finguard.ai", "Demo@123")}
+                className="flex flex-col items-start rounded-xl border border-slate-200 bg-slate-50/60 p-2 text-left hover:border-blue-300 hover:bg-blue-50/40 transition-all group cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-[11px] font-bold text-slate-900 group-hover:text-blue-600">Aman Verma</span>
+                  <span className="text-[9px] rounded bg-blue-50 text-blue-700 border border-blue-200/80 px-1 py-0.2 font-bold">Analyst</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 truncate w-full">demo@finguard...</span>
+                <span className="text-[9px] text-blue-600 font-medium">Demo@123</span>
               </button>
             </div>
           </div>
 
-          {/* Remember Me & Forgot Password */}
-          <div className="flex items-center justify-between text-xs pt-0.5">
-            <label className="flex items-center gap-2 text-slate-600 font-medium cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 accent-teal-700 rounded cursor-pointer border-slate-300"
-              />
-              <span>Remember me</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => onNavigate('forgot-password')}
-              className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:underline transition-all"
-            >
-              Forgot password?
-            </button>
+          {/* Database & Security indicator */}
+          <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-100 pt-2.5">
+            <div className="flex items-center gap-1.5">
+              <Database size={13} className="text-blue-600" />
+              <span>Dummy DB: {usersDb?.length || 3} accounts</span>
+            </div>
+            <div className="flex items-center gap-1 text-blue-700 font-semibold">
+              <Shield size={13} />
+              <span>Protected Gate</span>
+            </div>
           </div>
-
-          {/* Primary Login Button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-2.5 px-4 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 active:bg-teal-900 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 mt-2"
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Validating credentials...</span>
-              </>
-            ) : (
-              <span>Log in</span>
-            )}
-          </button>
-        </form>
-
-        {/* Demo Account Divider */}
-        <div className="relative flex items-center justify-center my-4">
-          <div className="border-t border-slate-200 w-full"></div>
-          <span className="bg-white px-3 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest absolute">
-            OR
-          </span>
-        </div>
-
-        {/* Demo Credential Autofill Button */}
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={handleAutofillDemo}
-            className="w-full py-2.5 px-4 text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100/80 border border-teal-200 rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs group"
-          >
-            <Sparkles className="w-4 h-4 text-teal-700 group-hover:scale-110 transition-transform" />
-            <span>Use Demo Credentials</span>
-          </button>
-          <p className="text-[10px] text-center text-slate-400 font-medium">
-            Demo credentials are filled for testing.
-          </p>
-        </div>
-
-        {/* Sign Up Navigation Link */}
-        <div className="text-center text-xs pt-2 border-t border-slate-100">
-          <span className="text-slate-500">Don't have a FinGuard account? </span>
-          <button
-            type="button"
-            onClick={() => onNavigate('signup')}
-            className="font-bold text-teal-700 hover:text-teal-800 hover:underline"
-          >
-            Create an account
-          </button>
-        </div>
-
-        {/* Security Message Badge */}
-        <div className="pt-2 text-center">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 px-3 py-1 rounded-full bg-slate-50 border border-slate-200">
-            🔒 Your financial workspace is protected.
-          </span>
         </div>
       </div>
-
-      {/* Screen Footer */}
-      <footer className="w-full text-center py-4 text-xs text-slate-400 space-y-1">
-        <div className="flex items-center justify-center gap-4 text-slate-500 font-medium">
-          <a href="#privacy" className="hover:text-slate-800 transition-colors">Privacy</a>
-          <span>•</span>
-          <a href="#terms" className="hover:text-slate-800 transition-colors">Terms</a>
-          <span>•</span>
-          <a href="#help" className="hover:text-slate-800 transition-colors">Help</a>
-        </div>
-        <p className="text-[11px]">© 2026 FinGuard AI. All rights reserved.</p>
-      </footer>
     </div>
   );
 }
